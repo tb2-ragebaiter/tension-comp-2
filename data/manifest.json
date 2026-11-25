@@ -1,0 +1,6 @@
+{
+  "_comment": "List one entry per climber. 'name' is what appears on the leaderboard; 'file' is the CSV's path inside this data/ folder (filenames with a space must be URL-encoded, e.g. 'ben%20ryan.csv').",
+  "climbers": [
+    { "name": "Ben Ryan", "file": "ben_ryan.csv" }
+  ]
+}

@@ -1,0 +1,715 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Board Comp</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Tension Board 2 comp leaderboard. Rolls over to a fresh month on the 1st, scores from BoardLib logbook CSVs.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Layout: month nav up top, Chad/Chud cards, leaderboard, season totals, monthly roll call. */
+:root{
+  --bg:#E8EBEE; --surface:#F6F7F8; --field:#FFFFFF; --ink:#101316; --muted:#58626B; --line:#CBD1D6;
+  --green:#0F8A55; --pink:#C0277A; --blue:#2A67D1; --on-accent:#FFFFFF;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D0F11; --surface:#16191C; --field:#0F1214; --ink:#ECEFF1; --muted:#98A1A9; --line:#2A2F34;
+    --green:#3DDC97; --pink:#FF5CA8; --blue:#5B9BFF; --on-accent:#07130D; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D0F11; --surface:#16191C; --field:#0F1214; --ink:#ECEFF1; --muted:#98A1A9; --line:#2A2F34;
+  --green:#3DDC97; --pink:#FF5CA8; --blue:#5B9BFF; --on-accent:#07130D; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg); color:var(--ink); font:400 16px/1.45 var(--body);
+  padding:24px max(16px,env(safe-area-inset-right,0px)) 56px max(16px,env(safe-area-inset-left,0px));
+}
+.wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1,h2,h3{font-family:var(--display);font-weight:700;margin:0;text-wrap:balance;letter-spacing:.01em}
+h1{font-size:clamp(2.4rem,7vw,3.6rem);line-height:.95;text-transform:uppercase}
+h2{font-size:1.5rem;text-transform:uppercase;letter-spacing:.04em}
+h3{font-size:1.1rem;text-transform:uppercase;letter-spacing:.05em}
+.eyebrow{margin:0 0 6px;font-size:.8rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.num{font-variant-numeric:tabular-nums}
+.top{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between}
+button{font:inherit;cursor:pointer;color:inherit}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+
+.monthnav{display:flex;align-items:center;gap:6px}
+.monthnav .lbl{min-width:12ch;text-align:center;font-family:var(--display);font-size:1.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.monthnav .live{display:block;font-size:.65rem;letter-spacing:.14em;color:var(--green);font-weight:600;margin-top:2px}
+.icon{width:40px;height:40px;border:1px solid var(--line);background:var(--surface);border-radius:8px;font-size:1.3rem;line-height:1}
+.icon:hover{border-color:var(--ink)}
+.icon[disabled]{opacity:.35;cursor:not-allowed}
+.todayBtn{background:transparent;border:1px solid var(--line);border-radius:6px;padding:8px 12px;font-family:var(--display);font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:.85rem;color:var(--muted)}
+.todayBtn:hover{border-color:var(--ink);color:var(--ink)}
+
+input[type=text],input[type=file]{font:inherit;font-size:16px;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:6px;padding:8px 10px;min-width:0}
+.ghost{background:transparent;border:1px solid var(--line);border-radius:6px;padding:8px 14px;white-space:nowrap}
+.ghost:hover{border-color:var(--ink)}
+.ghost.danger:hover{border-color:var(--pink);color:var(--pink)}
+
+.crown{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.card{border-radius:10px;padding:18px;min-width:0;display:flex;flex-direction:column;gap:4px;border:1px solid var(--line)}
+.card.chad{background:color-mix(in srgb,var(--green) 14%,var(--surface));border-color:color-mix(in srgb,var(--green) 45%,var(--line))}
+.card.chud{background:color-mix(in srgb,var(--pink) 12%,var(--surface));border-color:color-mix(in srgb,var(--pink) 45%,var(--line))}
+.tag{font-family:var(--display);font-weight:700;letter-spacing:.16em;text-transform:uppercase;font-size:1rem}
+.chad .tag{color:var(--green)} .chud .tag{color:var(--pink)}
+.card .who{font-family:var(--display);font-weight:700;font-size:clamp(2rem,6vw,2.8rem);line-height:1;overflow-wrap:anywhere}
+.card .sub{color:var(--muted)}
+
+.grid{display:grid;grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:20px;align-items:start}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;min-width:0}
+.panel>h2{margin-bottom:12px}
+.panel .hint{color:var(--muted);margin:0 0 12px;font-size:.95rem}
+
+.drop{border:2px dashed var(--line);border-radius:10px;padding:18px;text-align:center;color:var(--muted);transition:border-color .15s}
+.drop.hot{border-color:var(--green);color:var(--ink);background:color-mix(in srgb,var(--green) 6%,var(--surface))}
+.drop p{margin:0 0 8px}
+.drop .browse{color:var(--ink);text-decoration:underline;cursor:pointer}
+.climbers{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.climbers li{display:flex;gap:8px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--field);min-width:0}
+.climbers li input[type=text]{border:0;background:transparent;padding:2px 0;flex:1;min-width:0;font-weight:600}
+.climbers li .meta{color:var(--muted);font-size:.85rem;white-space:nowrap}
+.climbers li .src{font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;padding:2px 6px;border-radius:4px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.climbers li .src.repo{color:var(--green);border-color:color-mix(in srgb,var(--green) 45%,var(--line))}
+.climbers li .x{background:transparent;border:0;color:var(--muted);cursor:pointer;padding:4px 6px;border-radius:4px;font-size:1rem}
+.climbers li .x:hover{color:var(--pink);background:var(--bg)}
+.climbers li .x[disabled]{opacity:0;pointer-events:none}
+#msg{margin:8px 0 0;min-height:1.4em;font-size:.95rem}
+#msg.err{color:var(--pink)} #msg.ok{color:var(--green)}
+
+.lb{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.lb li{display:grid;grid-template-columns:2.2rem minmax(0,1fr) auto;gap:10px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.lb li:first-child{border-top:0}
+.rank{font-family:var(--display);font-weight:700;font-size:1.6rem;color:var(--muted);text-align:center}
+.lb .name{font-weight:600;font-size:1.05rem;display:flex;gap:8px;align-items:center;flex-wrap:wrap;overflow-wrap:anywhere}
+.lb .meta{color:var(--muted);font-size:.9rem}
+.bar{height:6px;border-radius:3px;background:var(--line);margin-top:6px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--blue);border-radius:3px}
+.chad-row .bar i{background:var(--green)} .chud-row .bar i{background:var(--pink)}
+.pts{font-family:var(--display);font-weight:700;font-size:1.8rem;line-height:1;text-align:right}
+.pts small{font-size:.75rem;color:var(--muted);letter-spacing:.08em;margin-left:3px}
+.pill{font-family:var(--display);font-weight:700;letter-spacing:.12em;font-size:.78rem;text-transform:uppercase;padding:1px 8px;border-radius:99px;border:1px solid currentColor}
+.pill.g{color:var(--green)} .pill.p{color:var(--pink)}
+.empty{color:var(--muted);padding:12px 0}
+
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:8px 10px;border-top:1px solid var(--line);white-space:nowrap}
+th{font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600;border-top:0}
+td.r,th.r{text-align:right}
+
+.foot{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+
+details.panel>summary{cursor:pointer;font-family:var(--display);font-weight:700;font-size:1.5rem;text-transform:uppercase;letter-spacing:.04em;list-style:none}
+details.panel>summary::-webkit-details-marker{display:none}
+details.panel>summary::after{content:" ▸";color:var(--muted)}
+details.panel[open]>summary::after{content:" ▾"}
+details.panel[open]>summary{margin-bottom:12px}
+
+.banner{border:1px solid color-mix(in srgb,var(--blue) 45%,var(--line));background:color-mix(in srgb,var(--blue) 6%,var(--surface));color:var(--ink);padding:12px 14px;border-radius:8px}
+.banner b{color:var(--blue)}
+
+@media (max-width:860px){.grid{grid-template-columns:1fr}}
+@media (max-width:520px){.crown{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <p class="eyebrow">Tension Board 2 · 2027 Comp</p>
+      <h1>Board Comp</h1>
+    </div>
+    <div class="monthnav">
+      <button class="icon" id="prev" type="button" aria-label="Previous month">&lsaquo;</button>
+      <div>
+        <div class="lbl" id="mlabel"></div>
+        <div class="live" id="liveFlag" hidden>Live · this month</div>
+      </div>
+      <button class="icon" id="next" type="button" aria-label="Next month">&rsaquo;</button>
+      <button class="todayBtn" id="today" type="button">Today</button>
+    </div>
+  </header>
+
+  <div id="seasonBanner" hidden class="banner"></div>
+
+  <section class="crown" id="crown" aria-label="Chad and Chud this month"></section>
+
+  <div class="grid">
+    <section class="panel">
+      <h2>Climbers</h2>
+      <p class="hint" id="climbersHint">Drop one BoardLib CSV per climber, or let the site read them from the <code>data/</code> folder of this repo.</p>
+      <div class="drop" id="drop">
+        <p>Drag CSVs here, or <label class="browse" for="file">browse files<input type="file" id="file" accept=".csv" multiple hidden></label>.</p>
+        <p style="font-size:.85rem;margin:0">See the README for how to pull from Tension on your Mac.</p>
+      </div>
+      <ul class="climbers" id="climbers"></ul>
+      <p id="msg" role="status"></p>
+      <div class="foot">
+        <button class="ghost" id="exportBtn" type="button">Export backup</button>
+        <button class="ghost" id="importBtn" type="button">Import backup</button>
+        <input type="file" id="importFile" accept=".json" hidden>
+        <button class="ghost danger" id="resetBtn" type="button">Clear local</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2 id="lbHead">Leaderboard</h2>
+      <p class="hint" id="lbhint"></p>
+      <div id="board"></div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <h2>Season totals · 2027</h2>
+    <p class="hint">Points add up across every comp month from January 2027 onward. Chad count and Chud count track titles claimed.</p>
+    <div class="scroll" id="season"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Monthly roll call</h2>
+    <p class="hint">Every month of the 2027 comp with sends logged.</p>
+    <div class="scroll" id="hof"></div>
+  </section>
+
+  <details class="panel">
+    <summary>How scoring works</summary>
+    <div id="rulesbody" style="margin-top:12px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px"></div>
+  </details>
+</div>
+
+<script>
+(function(){
+  // ---------- Config ----------
+  var COMP_START = "2027-01"; // The comp starts this month. Change if you want.
+
+  // ---------- Scoring ----------
+  var GRADES=[["4","V0",1],["5","V1",2],["5+","V2",3],["6a","V3",5],["6a+","V3",7],["6b","V4",10],["6b+","V4",14],["6c","V5",20],["6c+","V5",28],["7a","V6",40],["7a+","V7",56],["7b","V8",80],["7b+","V8",110],["7c","V9",150],["7c+","V10",210],["8a","V11",290],["8a+","V12",400],["8b","V13",550]];
+  var CLASSIC=1.25, MIRROR=0.9;
+  var PTS={},VOF={},IDX={};
+  GRADES.forEach(function(g,i){PTS[g[0]]=g[2];VOF[g[0]]=g[1];IDX[g[0]]=i;});
+  function gl(g){return g+" / "+(VOF[g]||"?");}
+
+  var FMAP={"4a":"4","4b":"4","4c":"4","5a":"5","5b":"5","5c":"5+",
+            "6a":"6a","6a+":"6a+","6b":"6b","6b+":"6b+","6c":"6c","6c+":"6c+",
+            "7a":"7a","7a+":"7a+","7b":"7b","7b+":"7b+","7c":"7c","7c+":"7c+",
+            "8a":"8a","8a+":"8a+","8b":"8b"};
+
+  function pointsFor(r, priorOrigDay){
+    if(r.r) return 0;
+    var p = PTS[r.g] || 0;
+    if(r.c) p *= CLASSIC;
+    if(r.m && priorOrigDay && priorOrigDay < r.d) p *= MIRROR;
+    return p;
+  }
+
+  // ---------- State / storage ----------
+  var KEY = "tbcomp-github-v2";
+  var state = { localClimbers: {} };
+  try{ var raw = localStorage.getItem(KEY); if(raw) state = Object.assign(state, JSON.parse(raw)); }catch(e){}
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){} }
+  // repoClimbers live only in memory; they come from data/manifest.json on every load.
+  var repoClimbers = {};
+
+  // ---------- Helpers ----------
+  var $ = function(s){return document.querySelector(s);};
+  function h(tag, props){
+    var e = document.createElement(tag);
+    if(props) for(var k in props){ var v = props[k];
+      if(k==="class") e.className = v;
+      else if(k.slice(0,2)==="on") e[k] = v;
+      else if(v===true) e.setAttribute(k,"");
+      else if(v!==false && v!=null) e.setAttribute(k, v); }
+    for(var i=2;i<arguments.length;i++){
+      [].concat(arguments[i]).forEach(function(c){
+        if(c==null||c===false) return;
+        e.append(c.nodeType ? c : document.createTextNode(String(c)));
+      });
+    }
+    return e;
+  }
+  function clear(el){ while(el.firstChild) el.removeChild(el.firstChild); return el; }
+  function pad(n){ return String(n).padStart(2,"0"); }
+  function r1(n){ return Math.round(n); }
+  function slugToName(s){
+    s = (s||"").replace(/\.csv$/i,"").replace(/_sends$/,"").replace(/[_\-]+/g," ").trim();
+    return s.split(" ").filter(Boolean).map(function(w){return w[0].toUpperCase()+w.slice(1);}).join(" ") || "Unnamed";
+  }
+  function todayYM(){
+    var d = new Date();
+    return d.getFullYear() + "-" + pad(d.getMonth()+1);
+  }
+  function monthName(ym){
+    var p = ym.split("-");
+    return new Date(Number(p[0]), Number(p[1])-1, 1).toLocaleString("en-US",{month:"long", year:"numeric"});
+  }
+  function monthRange(fromYM, toYM){
+    var out = [];
+    var y = Number(fromYM.slice(0,4)), m = Number(fromYM.slice(5,7));
+    var ey = Number(toYM.slice(0,4)),   em = Number(toYM.slice(5,7));
+    while(y < ey || (y === ey && m <= em)){
+      out.push(y + "-" + pad(m));
+      m++; if(m > 12){ m = 1; y++; }
+      if(out.length > 240) break;
+    }
+    return out;
+  }
+  function hardest(list){
+    var b = null;
+    list.forEach(function(r){ if(!r.r && (b===null || IDX[r.g] > IDX[b])) b = r.g; });
+    return b;
+  }
+
+  // ---------- Month cursor ----------
+  var cur = todayYM();
+  function stepMonth(delta){
+    var y = Number(cur.slice(0,4)), m = Number(cur.slice(5,7)) + delta;
+    while(m < 1){ m += 12; y--; }
+    while(m > 12){ m -= 12; y++; }
+    cur = y + "-" + pad(m);
+    render();
+  }
+
+  // ---------- CSV parsing ----------
+  // Minimal RFC 4180 parser. Handles quoted fields with commas / embedded
+  // newlines, and doubled-up "" inside quoted strings.
+  function parseCSVText(text){
+    var rows = [], row = [], field = "", inQuotes = false;
+    if(text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    for(var i = 0; i < text.length; i++){
+      var ch = text[i];
+      if(inQuotes){
+        if(ch === '"'){
+          if(text[i+1] === '"'){ field += '"'; i++; }
+          else inQuotes = false;
+        }else field += ch;
+      }else{
+        if(ch === '"') inQuotes = true;
+        else if(ch === ','){ row.push(field); field = ""; }
+        else if(ch === '\n'){ row.push(field); rows.push(row); row = []; field = ""; }
+        else if(ch === '\r'){ /* swallow */ }
+        else field += ch;
+      }
+    }
+    if(field.length || row.length){ row.push(field); rows.push(row); }
+    if(!rows.length) return [];
+    var header = rows.shift();
+    return rows.filter(function(r){ return r.length > 1 || (r.length === 1 && r[0] !== ""); })
+               .map(function(r){
+      var obj = {};
+      for(var k = 0; k < header.length; k++) obj[header[k]] = r[k] != null ? r[k] : "";
+      return obj;
+    });
+  }
+  function parseCSVFile(file){
+    return new Promise(function(resolve, reject){
+      var reader = new FileReader();
+      reader.onload = function(){ try{ resolve(parseCSVText(String(reader.result))); }catch(e){ reject(e); } };
+      reader.onerror = function(){ reject(reader.error || new Error("Read failed")); };
+      reader.readAsText(file);
+    });
+  }
+  function normalizeRows(rows){
+    var out = [];
+    rows.forEach(function(row){
+      if(row.board && row.board !== "tension") return;
+      if(row.is_ascent && String(row.is_ascent).toLowerCase() !== "true") return;
+      var fontCombo = (row.logged_grade || row.displayed_grade || "").trim();
+      if(!fontCombo) return;
+      var g = FMAP[fontCombo.split("/")[0].trim()];
+      if(!g) return;
+      var date = (row.date || "").slice(0,10);
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+      out.push({
+        n: String(row.climb_name || "").trim(),
+        g: g,
+        a: Number(row.angle || 40),
+        d: date,
+        t: (row.date || "").slice(11,16) || "",
+        c: String(row.is_benchmark || "").toLowerCase() === "true",
+        m: String(row.is_mirror   || "").toLowerCase() === "true",
+        r: String(row.is_repeat   || "").toLowerCase() === "true",
+      });
+    });
+    out.sort(function(a,b){ return (a.d+a.t).localeCompare(b.d+b.t); });
+    return out;
+  }
+  async function ingestFiles(files){
+    var added = 0, skipped = 0, errors = [];
+    for(var i=0;i<files.length;i++){
+      var f = files[i];
+      try{
+        var rows = await parseCSVFile(f);
+        var norm = normalizeRows(rows);
+        if(!norm.length){ skipped++; continue; }
+        var name = slugToName(f.name);
+        var key = name.toLowerCase();
+        var prev = state.localClimbers[key];
+        state.localClimbers[key] = {
+          name: prev ? prev.name : name,
+          rows: norm,
+          filename: f.name,
+          imported: new Date().toISOString(),
+        };
+        added++;
+      }catch(e){ errors.push(f.name + ": " + (e && e.message || e)); }
+    }
+    save();
+    var parts = [];
+    if(added)   parts.push(added + " CSV" + (added===1?"":"s") + " loaded");
+    if(skipped) parts.push(skipped + " skipped");
+    if(errors.length) parts.push(errors.join(" · "));
+    say(parts.join(" · "), errors.length ? "err" : "ok");
+    render();
+  }
+  function say(t, kind){ var m = $("#msg"); m.textContent = t || ""; m.className = kind || ""; }
+
+  // ---------- Auto-load from data/ ----------
+  async function loadManifest(){
+    try{
+      var res = await fetch("data/manifest.json?t=" + Date.now(), {cache:"no-store"});
+      if(!res.ok) return;
+      var manifest = await res.json();
+      if(!manifest || !Array.isArray(manifest.climbers)) return;
+      for(var i = 0; i < manifest.climbers.length; i++){
+        var entry = manifest.climbers[i];
+        if(!entry || !entry.name || !entry.file) continue;
+        try{
+          var csvRes = await fetch("data/" + entry.file + "?t=" + Date.now(), {cache:"no-store"});
+          if(!csvRes.ok) continue;
+          var txt = await csvRes.text();
+          var rows = parseCSVText(txt);
+          var norm = normalizeRows(rows);
+          if(!norm.length) continue;
+          repoClimbers[entry.name.toLowerCase()] = {
+            name: entry.name,
+            rows: norm,
+            file: entry.file,
+          };
+        }catch(e){ /* skip failed CSV */ }
+      }
+      render();
+    }catch(e){ /* no manifest, that's fine */ }
+  }
+
+  // ---------- Climber views ----------
+  function climberList(){
+    // Repo takes precedence if names collide; otherwise merge both.
+    var out = {}, k;
+    for(k in state.localClimbers) out[k] = Object.assign({}, state.localClimbers[k], {source:"local"});
+    for(k in repoClimbers)        out[k] = Object.assign({}, repoClimbers[k],        {source:"repo"});
+    return Object.values(out);
+  }
+  function scoreRowsForMonth(rowsFull, ym){
+    var window = rowsFull.filter(function(r){ return r.d.slice(0,7) === ym; });
+    var origDay = {};
+    rowsFull.forEach(function(r){ if(!r.m && !r.r && origDay[r.n] == null) origDay[r.n] = r.d; });
+    var total = 0, first = 0;
+    window.forEach(function(r){ if(!r.r) first++; total += pointsFor(r, origDay[r.n]); });
+    return { total: total, sends: window.length, first: first, hard: hardest(window) };
+  }
+
+  // ---------- Render ----------
+  function renderClimbers(){
+    var ul = clear($("#climbers"));
+    var list = climberList();
+    if(!list.length){
+      ul.append(h("li",{style:"color:var(--muted);justify-content:center;border-style:dashed"},"No climbers yet. Drop a CSV or push one to data/."));
+      return;
+    }
+    list.sort(function(a,b){ return a.name.localeCompare(b.name); });
+    list.forEach(function(c){
+      var key = c.name.toLowerCase();
+      var isRepo = c.source === "repo";
+      var input = h("input",{type:"text", value:c.name, maxlength:40, disabled:isRepo?true:false, onchange:function(ev){
+        var newName = ev.target.value.trim() || "Unnamed";
+        var newKey = newName.toLowerCase();
+        var entry = state.localClimbers[key];
+        if(!entry) return;
+        if(newKey !== key){
+          delete state.localClimbers[key];
+          state.localClimbers[newKey] = Object.assign({}, entry, {name:newName});
+        } else entry.name = newName;
+        save(); render();
+      }});
+      var meta = h("span",{class:"meta"}, c.rows.length + " sends");
+      var src = h("span",{class:"src " + (isRepo?"repo":"")}, isRepo ? "repo" : "local");
+      var x = h("button",{class:"x", type:"button", title:isRepo?"From the repo's data/ folder":"Remove", disabled:isRepo?true:false, onclick:function(){
+        delete state.localClimbers[key]; save(); render();
+      }},"✕");
+      ul.append(h("li", null, input, meta, src, x));
+    });
+  }
+  function rankedForMonth(ym){
+    return climberList().map(function(c){
+      var s = scoreRowsForMonth(c.rows, ym);
+      return { name: c.name, total: s.total, sends: s.sends, first: s.first, hard: s.hard, source: c.source };
+    }).sort(function(a,b){ return (b.total-a.total) || (b.sends-a.sends) || a.name.localeCompare(b.name); });
+  }
+  function renderCrown(ranked){
+    var box = clear($("#crown"));
+    var hasSends = ranked.some(function(x){return x.sends > 0;});
+    var max = ranked.length ? ranked[0].total : 0;
+    var min = ranked.length ? ranked[ranked.length-1].total : 0;
+    var chad = (hasSends && max > 0) ? ranked.filter(function(x){return x.total === max;}) : [];
+    var chud = (ranked.length >= 2 && min < max && hasSends) ? ranked.filter(function(x){return x.total === min;}) : [];
+    box.append(crownCard("chad","Chad",chad));
+    box.append(crownCard("chud","Chud",chud));
+  }
+  function crownCard(kind, label, list){
+    var card = h("div",{class:"card "+kind}, h("div",{class:"tag"}, label));
+    if(!list.length){
+      card.append(h("div",{class:"who"}, "—"));
+      card.append(h("div",{class:"sub"}, kind === "chad" ? "No sends yet" : "Needs at least two scores to call a Chud"));
+    }else{
+      card.append(h("div",{class:"who"}, list.map(function(x){return x.name;}).join(" & ")));
+      card.append(h("div",{class:"sub num"}, r1(list[0].total) + " pts · " + list[0].sends + " send" + (list[0].sends===1?"":"s") + (list.length>1?" each (tie)":"")));
+    }
+    return card;
+  }
+  function renderBoard(ranked){
+    var el = clear($("#board"));
+    var hint = $("#lbhint");
+    $("#lbHead").textContent = "Leaderboard · " + monthName(cur);
+    if(!ranked.length){ hint.textContent = ""; el.append(h("p",{class:"empty"},"Add climbers to see the board.")); return; }
+    var max = ranked[0].total, min = ranked[ranked.length-1].total;
+    var hasSends = ranked.some(function(x){return x.sends > 0;});
+    hint.textContent = hasSends ? ("Points for " + monthName(cur) + ".") : ("No sends logged in " + monthName(cur) + " yet.");
+    var chadSet = {}, chudSet = {};
+    if(hasSends && max > 0) ranked.filter(function(x){return x.total===max;}).forEach(function(x){ chadSet[x.name]=1; });
+    if(ranked.length>=2 && min<max && hasSends) ranked.filter(function(x){return x.total===min;}).forEach(function(x){ chudSet[x.name]=1; });
+    var ul = h("ul",{class:"lb"});
+    ranked.forEach(function(x, i){
+      var cls = chadSet[x.name] ? "chad-row" : (chudSet[x.name] ? "chud-row" : "");
+      var pct = max > 0 ? Math.max(2, x.total/max*100) : 0;
+      var meta = x.sends ? (x.sends + " send" + (x.sends===1?"":"s") + (x.first !== x.sends ? " · " + x.first + " first" : "") + (x.hard ? " · hardest " + gl(x.hard) : "")) : "No sends this month";
+      ul.append(h("li",{class:cls},
+        h("div",{class:"rank num"}, i+1),
+        h("div", null,
+          h("div",{class:"name"}, x.name,
+            chadSet[x.name] ? h("span",{class:"pill g"},"Chad") : null,
+            chudSet[x.name] ? h("span",{class:"pill p"},"Chud") : null),
+          h("div",{class:"meta"}, meta),
+          h("div",{class:"bar"}, h("i",{style:"width:"+pct+"%"}))),
+        h("div",{class:"pts num"}, r1(x.total), h("small", null, "PTS"))));
+    });
+    el.append(ul);
+  }
+  function renderSeason(){
+    var el = clear($("#season"));
+    var list = climberList();
+    if(!list.length){ el.append(h("p",{class:"empty"},"No climbers yet.")); return; }
+    var now = todayYM();
+    if(now < COMP_START){
+      el.append(h("p",{class:"empty"},"Season opens " + monthName(COMP_START) + ". Preseason sends don't count."));
+      return;
+    }
+    var months = monthRange(COMP_START, now);
+    var tots = {};
+    list.forEach(function(c){ tots[c.name] = { name:c.name, pts:0, sends:0, first:0, chad:0, chud:0, hard:null, source:c.source }; });
+    months.forEach(function(ym){
+      var ranked = rankedForMonth(ym);
+      var hasSends = ranked.some(function(x){return x.sends > 0;});
+      if(!hasSends) return;
+      var max = ranked[0].total, min = ranked[ranked.length-1].total;
+      ranked.forEach(function(x){
+        var t = tots[x.name];
+        if(!t) return;
+        t.pts += x.total; t.sends += x.sends; t.first += x.first;
+        if(x.hard && (t.hard===null || IDX[x.hard] > IDX[t.hard])) t.hard = x.hard;
+      });
+      if(max > 0) ranked.filter(function(x){return x.total===max;}).forEach(function(x){ if(tots[x.name]) tots[x.name].chad++; });
+      if(ranked.length>=2 && min<max) ranked.filter(function(x){return x.total===min;}).forEach(function(x){ if(tots[x.name]) tots[x.name].chud++; });
+    });
+    var rows = Object.values(tots).sort(function(a,b){ return (b.pts-a.pts) || (b.sends-a.sends) || a.name.localeCompare(b.name); });
+    var tb = h("tbody");
+    rows.forEach(function(t, i){
+      tb.append(h("tr", null,
+        h("td", null, i+1),
+        h("td", null, t.name),
+        h("td",{class:"r"}, r1(t.pts)),
+        h("td",{class:"r"}, t.sends),
+        h("td", null, t.hard ? gl(t.hard) : "—"),
+        h("td",{class:"r"}, t.chad || "–"),
+        h("td",{class:"r"}, t.chud || "–")));
+    });
+    el.append(h("table", null,
+      h("thead", null, h("tr", null,
+        h("th", null, "#"), h("th", null, "Climber"),
+        h("th",{class:"r"}, "Pts"), h("th",{class:"r"}, "Sends"),
+        h("th", null, "Hardest"),
+        h("th",{class:"r"}, "Chad"), h("th",{class:"r"}, "Chud")
+      )), tb));
+  }
+  function renderHof(){
+    var el = clear($("#hof"));
+    var list = climberList();
+    if(!list.length){ el.append(h("p",{class:"empty"},"No climbers yet.")); return; }
+    var now = todayYM();
+    var startYM = now < COMP_START ? COMP_START : COMP_START;
+    var months = monthRange(startYM, now);
+    var any = months.some(function(ym){ return rankedForMonth(ym).some(function(x){return x.sends>0;}); });
+    if(!any){
+      el.append(h("p",{class:"empty"},"No comp sends logged yet. First Chad gets called " + monthName(startYM) + "."));
+      return;
+    }
+    var tb = h("tbody");
+    months.slice().reverse().forEach(function(ym){
+      var ranked = rankedForMonth(ym);
+      var hasSends = ranked.some(function(x){return x.sends > 0;});
+      if(!hasSends) return;
+      var max = ranked[0].total, min = ranked[ranked.length-1].total;
+      var chad = max > 0 ? ranked.filter(function(x){return x.total===max;}) : [];
+      var chud = (ranked.length>=2 && min<max) ? ranked.filter(function(x){return x.total===min;}) : [];
+      var liveChip = ym === now ? " (live)" : "";
+      tb.append(h("tr", null,
+        h("td", null, monthName(ym) + liveChip),
+        h("td", null, chad.length ? chad.map(function(x){return x.name+" · "+r1(x.total);}).join(" / ") : "—"),
+        h("td", null, chud.length ? chud.map(function(x){return x.name+" · "+r1(x.total);}).join(" / ") : "—")));
+    });
+    el.append(h("table", null, h("thead", null, h("tr", null, h("th",null,"Month"), h("th",null,"Chad"), h("th",null,"Chud"))), tb));
+  }
+  function renderBanner(){
+    var b = $("#seasonBanner");
+    var now = todayYM();
+    if(now < COMP_START){
+      b.textContent = "Preseason — the 2027 comp opens " + monthName(COMP_START) + ". Click prev/next to look at test months.";
+      b.hidden = false;
+    } else {
+      b.hidden = true;
+    }
+  }
+  function renderRules(){
+    var a = h("div", null,
+      h("h3", null, "The rules"),
+      h("ol", {style:"margin:8px 0 0;padding-left:1.2em;display:flex;flex-direction:column;gap:8px"},
+        h("li", null, "Points come from the grade. Font and V are shown together; half steps count (7b = 80, 7b+ = 110, 7c = 150)."),
+        h("li", null, "Tension benchmarks score as classics: +25% over the base grade."),
+        h("li", null, "Each climb counts once per climber. BoardLib's is_repeat flag means the climb was logged before — those lines show up but score 0."),
+        h("li", null, "A mirrored send of a climb you already did is worth 90%. Earliest non-mirror ascent decides, so the order you log them doesn't change the math."),
+        h("li", null, "Each calendar month gets its own Chad (top) and Chud (bottom). Ties are called jointly. The season panel adds months together from January 2027 on.")
+      ));
+    var tb = h("tbody");
+    GRADES.forEach(function(g){
+      tb.append(h("tr", null,
+        h("td", null, g[0]),
+        h("td", null, g[1]),
+        h("td",{class:"r"}, g[2]),
+        h("td",{class:"r"}, r1(g[2] * CLASSIC))
+      ));
+    });
+    var b = h("div",{class:"scroll"},
+      h("table", null,
+        h("thead", null, h("tr", null,
+          h("th", null, "Font"), h("th", null, "V"),
+          h("th",{class:"r"}, "Points"), h("th",{class:"r"}, "Classic")
+        )),
+        tb));
+    clear($("#rulesbody")).append(a, b);
+  }
+  function renderNav(){
+    $("#mlabel").textContent = monthName(cur);
+    $("#liveFlag").hidden = (cur !== todayYM());
+  }
+  function render(){
+    renderNav();
+    renderBanner();
+    renderClimbers();
+    var ranked = rankedForMonth(cur);
+    renderCrown(ranked);
+    renderBoard(ranked);
+    renderSeason();
+    renderHof();
+  }
+
+  // ---------- Wiring ----------
+  function setupDrop(){
+    var d = $("#drop");
+    ["dragenter","dragover"].forEach(function(ev){
+      d.addEventListener(ev, function(e){ e.preventDefault(); d.classList.add("hot"); });
+    });
+    ["dragleave","drop"].forEach(function(ev){
+      d.addEventListener(ev, function(e){ e.preventDefault(); d.classList.remove("hot"); });
+    });
+    d.addEventListener("drop", function(e){
+      var files = Array.from(e.dataTransfer.files || []).filter(function(f){ return /\.csv$/i.test(f.name); });
+      if(files.length) ingestFiles(files);
+      else say("Drop one or more .csv files.", "err");
+    });
+    $("#file").addEventListener("change", function(e){
+      var files = Array.from(e.target.files || []);
+      if(files.length) ingestFiles(files);
+      e.target.value = "";
+    });
+  }
+  function setupNav(){
+    $("#prev").addEventListener("click", function(){ stepMonth(-1); });
+    $("#next").addEventListener("click", function(){ stepMonth(+1); });
+    $("#today").addEventListener("click", function(){ cur = todayYM(); render(); });
+  }
+  function setupBackups(){
+    $("#exportBtn").addEventListener("click", function(){
+      var blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url; a.download = "tension-comp-backup-" + todayYM() + ".json";
+      document.body.appendChild(a); a.click();
+      setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 1000);
+    });
+    $("#importBtn").addEventListener("click", function(){ $("#importFile").click(); });
+    $("#importFile").addEventListener("change", function(e){
+      var f = e.target.files && e.target.files[0]; if(!f) return;
+      var reader = new FileReader();
+      reader.onload = function(){
+        try{
+          var parsed = JSON.parse(reader.result);
+          if(parsed && typeof parsed === "object" && parsed.localClimbers){
+            state = Object.assign({ localClimbers:{} }, parsed);
+            save(); say("Backup loaded.", "ok"); render();
+          } else say("That file isn't a comp backup.", "err");
+        }catch(err){ say("Couldn't read the backup: " + err.message, "err"); }
+      };
+      reader.readAsText(f);
+      e.target.value = "";
+    });
+    $("#resetBtn").addEventListener("click", function(){
+      if(!Object.keys(state.localClimbers).length){ say("Nothing local to clear.", ""); return; }
+      if($("#resetBtn").dataset.sure){
+        state.localClimbers = {}; save(); render();
+        delete $("#resetBtn").dataset.sure;
+        $("#resetBtn").textContent = "Clear local";
+        say("Local climbers cleared. (Repo climbers stay.)", "ok");
+      }else{
+        $("#resetBtn").dataset.sure = "1";
+        $("#resetBtn").textContent = "Really clear?";
+        setTimeout(function(){
+          delete $("#resetBtn").dataset.sure;
+          $("#resetBtn").textContent = "Clear local";
+        }, 3000);
+      }
+    });
+  }
+
+  // ---------- Boot ----------
+  setupDrop();
+  setupNav();
+  setupBackups();
+  renderRules();
+  render();
+  loadManifest();
+})();
+</script>
+</body>
+</html>
